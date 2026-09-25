@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CollabBoard - Real-Time Collaborative Whiteboard</title>
+  <meta name="description" content="High-performance Real-Time Multi-User Collaborative Whiteboard powered by Node.js, Express, Socket.io, and HTML5 Canvas.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Top Navigation & Room Status Bar -->
+  <header class="top-nav" id="top-nav">
+    <div class="nav-left">
+      <div class="brand">
+        <span class="brand-icon">🎨</span>
+        <h1 class="brand-title">CollabBoard</h1>
+        <span class="badge-live">LIVE</span>
+      </div>
+
+      <div class="room-selector-wrapper">
+        <div class="room-input-group">
+          <span class="room-label">Room:</span>
+          <input type="text" id="input-room-id" placeholder="Enter room ID..." value="DESIGN_101" spellcheck="false">
+          <button id="btn-change-room" title="Switch Room">Join</button>
+        </div>
+        <button id="btn-copy-link" class="btn-icon-text" title="Copy Invite Link">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+          <span>Share</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="nav-center quick-rooms">
+      <span class="quick-title">Quick:</span>
+      <button class="chip-room" data-room="DESIGN_101">#DESIGN_101</button>
+      <button class="chip-room" data-room="demo">#demo</button>
+      <button class="chip-room" data-room="sprint-brainstorm">#sprint-brainstorm</button>
+    </div>
+
+    <div class="nav-right">
+      <!-- Connection Status Indicator -->
+      <div class="status-pill" id="connection-status" title="Socket Connection State">
+        <span class="status-dot online" id="status-dot"></span>
+        <span class="status-text" id="status-text">Connected</span>
+        <span class="ping-badge" id="ping-badge">12ms</span>
+      </div>
+
+      <!-- Active Collaborators Stack -->
+      <div class="collaborators-container" id="collaborators-container">
+        <div class="avatar-stack" id="avatar-stack">
+          <!-- Dynamically populated avatar chips -->
+        </div>
+        <div class="user-count-badge" id="user-count-badge">1 online</div>
+      </div>
+
+      <!-- User Profile Pill -->
+      <div class="user-profile-pill" id="user-profile-pill" title="Click to edit profile">
+        <div class="user-avatar-preview" id="user-avatar-preview" style="background-color: #3b82f6;">P</div>
+        <span class="user-name-display" id="user-name-display">Pratik</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Canvas Board Container -->
+  <main class="canvas-viewport" id="canvas-viewport">
+    <canvas id="whiteboard"></canvas>
+    <!-- Overlay for collaborator pointers -->
+    <div id="cursor-overlay" class="cursor-overlay"></div>
+  </main>
+
+  <!-- Floating Glassmorphic Drawing Toolbar -->
+  <aside class="floating-toolbar" id="floating-toolbar">
+    <!-- Tool Selection Section -->
+    <div class="toolbar-section tools-group">
+      <button class="tool-btn active" id="tool-brush" data-tool="brush" title="Pen / Freehand (P)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path><path d="M2 2l7.586 7.586"></path><circle cx="11" cy="11" r="2"></circle></svg>
+      </button>
+      <button class="tool-btn" id="tool-eraser" data-tool="eraser" title="Eraser (E)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"></path><path d="M22 21H7"></path><path d="m5 11 9 9"></path></svg>
+      </button>
+      <button class="tool-btn" id="tool-line" data-tool="line" title="Straight Line (L)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"></line></svg>
+      </button>
+      <button class="tool-btn" id="tool-rect" data-tool="rect" title="Rectangle (R)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+      </button>
+      <button class="tool-btn" id="tool-circle" data-tool="circle" title="Circle (C)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"></circle></svg>
+      </button>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Color Palette Section -->
+    <div class="toolbar-section color-group">
+      <div class="color-swatches" id="color-swatches">
+        <button class="color-swatch active" style="--swatch-color: #1e293b;" data-color="#1e293b" title="Charcoal"></button>
+        <button class="color-swatch" style="--swatch-color: #ef4444;" data-color="#ef4444" title="Crimson"></button>
+        <button class="color-swatch" style="--swatch-color: #f97316;" data-color="#f97316" title="Orange"></button>
+        <button class="color-swatch" style="--swatch-color: #10b981;" data-color="#10b981" title="Emerald"></button>
+        <button class="color-swatch" style="--swatch-color: #3b82f6;" data-color="#3b82f6" title="Blue"></button>
+        <button class="color-swatch" style="--swatch-color: #8b5cf6;" data-color="#8b5cf6" title="Purple"></button>
+      </div>
+      <div class="custom-color-picker-wrap" title="Custom Color">
+        <input type="color" id="input-color-picker" value="#1e293b">
+        <label for="input-color-picker" class="picker-label" id="picker-label">🎨</label>
+      </div>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Stroke Width Slider -->
+    <div class="toolbar-section stroke-size-group">
+      <div class="stroke-preview" id="stroke-preview">
+        <div class="stroke-preview-circle" id="stroke-preview-circle"></div>
+      </div>
+      <input type="range" id="input-stroke-size" min="1" max="40" value="4" title="Stroke Thickness">
+      <span class="stroke-size-text" id="stroke-size-text">4px</span>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Action Controls (Undo, Clear, Export, Grid) -->
+    <div class="toolbar-section actions-group">
+      <button class="action-btn" id="btn-undo" title="Undo (Ctrl+Z)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+        <span>Undo</span>
+      </button>
+
+      <button class="action-btn danger" id="btn-clear" title="Clear Canvas">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        <span>Clear</span>
+      </button>
+
+      <button class="action-btn" id="btn-export" title="Export as PNG">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        <span>Export</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Bottom Info / Student Credit Footer -->
+  <footer class="bottom-bar">
+    <div class="author-credits">
+      <span class="credit-tag">Assignment 11</span>
+      <span>•</span>
+      <span>Collaborative Whiteboard & Canvas (Socket.io)</span>
+      <span>•</span>
+      <strong>Pratik Swain</strong> (<code>150096725184</code>)
+    </div>
+    <div class="canvas-stats" id="canvas-stats">
+      <span>Strokes: <strong id="stat-stroke-count">0</strong></span>
+      <span>•</span>
+      <span id="stat-coords">X: 0, Y: 0</span>
+    </div>
+  </footer>
+
+  <!-- User Profile Config Modal -->
+  <div class="modal-backdrop hidden" id="modal-profile">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Collaborator Profile</h3>
+        <button class="btn-close-modal" id="btn-close-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-field">
+          <label for="input-username">Your Display Name</label>
+          <input type="text" id="input-username" placeholder="e.g. Alice" maxlength="20">
+        </div>
+        <div class="form-field">
+          <label>Your Cursor Color</label>
+          <div class="user-color-selection">
+            <button class="user-color-btn active" data-color="#ff5722" style="background:#ff5722"></button>
+            <button class="user-color-btn" data-color="#3b82f6" style="background:#3b82f6"></button>
+            <button class="user-color-btn" data-color="#10b981" style="background:#10b981"></button>
+            <button class="user-color-btn" data-color="#ec4899" style="background:#ec4899"></button>
+            <button class="user-color-btn" data-color="#8b5cf6" style="background:#8b5cf6"></button>
+            <button class="user-color-btn" data-color="#f59e0b" style="background:#f59e0b"></button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" id="btn-save-profile">Save & Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Socket.io client script -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Main Canvas Client Logic -->
+  <script src="canvas.js"></script>
+</body>
+</html>
